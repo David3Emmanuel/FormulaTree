@@ -2,7 +2,6 @@
 
 def main():
     expr_str = input("Enter expression: ")
-    tokens = preprocess(expr_str)
     expression = compile(expr_str)
     print(expression)
 
@@ -23,7 +22,8 @@ def preprocess(expr_input):
 
 
 def compile(tokens):
-    pass
+    tokens = preprocess(tokens)
+    return None
 
 
 if __name__ == "__main__":
