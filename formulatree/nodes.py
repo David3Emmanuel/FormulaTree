@@ -1,12 +1,20 @@
 class Node:
-    pass
+    def __init__(self) -> None:
+        self.children = []
+    
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}"
 
 
 class Root(Node):
     def __init__(self) -> None:
         super().__init__()
-    def add(self, token):
-        pass
+
+    def add(self, node):
+        self.children.append(node)
+    
+    def __repr__(self):
+        return f"{self.children}"
 
 
 class Add(Node):

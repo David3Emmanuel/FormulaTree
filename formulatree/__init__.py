@@ -20,7 +20,7 @@ opening_types = {
 
 def main():
     expr_str = input("Enter expression: ")
-    expression = compile(expr_str)
+    expression = compile_expr(expr_str)
     print("Expression:", expression)
 
 
@@ -118,14 +118,14 @@ def preprocess(expr_input, root=True) -> list[Union[Token, list]]:
     return tokens
 
 
-def compile(expr_input: Any, root=True):
+def compile_expr(expr_input: Any, root=True):
     tokens = preprocess(expr_input)
     root = Root()
     for token in tokens:
         if isinstance(token, Token):
             root.add(token.to_node())
         elif isinstance(token, list):
-            paren = compile(token, False)
+            paren = compile_expr(token, False)
             root.add(paren)
     return root
 
