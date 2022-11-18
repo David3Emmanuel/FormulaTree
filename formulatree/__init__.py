@@ -1,5 +1,5 @@
 from typing import Union, Any
-from nodes import *
+from .nodes import *
 import re
 
 operations = {
@@ -88,18 +88,35 @@ class Token:
 
 def list_to_tokens(expr_list: list[str]) -> list[Union[Token, list]]:
     tokens = []
+
+    def is_term(token: Union[Token, list]) -> bool:
+        if isinstance(token, list):
+            return True
+        return token.type in [Num, Var]
+
+    def add(token: Union[Token, list]) -> None:
+        if tokens:
+            if is_term(tokens[-1]):
+                if is_term(token):
+                    tokens.append(Token("*", Mult))
+                elif token.type is Neg:
+                    tokens.append(Token("+", Add))
+                elif token.type is Inv:
+                    tokens.append(Token("*", Mult))
+        tokens.append(token)
+
     for term in expr_list:
         if term[0] == '(':
-            tokens.append(preprocess(term[1:-1], False))
+            add(preprocess(term[1:-1], False))
         elif term[0] in opening_chars:
             assert term[-1] in closing_chars
-            tokens.append(Token(term, opening_types[term[0]]))
+            add(Token(term, opening_types[term[0]]))
         elif term in operations:
-            tokens.append(Token(term, operations[term]))
+            add(Token(term, operations[term]))
         elif re.match(r"^[A-Za-z]$", term):
-            tokens.append(Token(term, Var))
+            add(Token(term, Var))
         elif re.match(r"\d", term):
-            tokens.append(Token(term, Num))
+            add(Token(term, Num))
         else:
             raise ValueError(f"Unidentified term '{term}'")
     return tokens
