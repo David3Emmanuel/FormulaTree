@@ -1,14 +1,29 @@
+from typing import Union
 from nodes import *
 import re
 
+operations = {
+    "+",
+    "-",
+    "*",
+    "/",
+    "^"
+}
+opening_chars = "[(\\{"
+closing_chars = "])\\}"
+opening_types = {
+    "[": "Func",
+    "{": "Set",
+    "\\": "Const"
+}
 
 def main():
     expr_str = input("Enter expression: ")
     expression = compile(expr_str)
-    print(expression)
+    print("Expression:", expression)
 
 
-def string_to_list(expr_str):
+def string_to_list(expr_str: str) -> list[str]:
     expr_list = []
     current = ''
     level = 0
@@ -18,7 +33,7 @@ def string_to_list(expr_str):
 
         # Check for parentheses
         found_close = False
-        for open, close in zip("[(\\{", "])\\}"):
+        for open, close in zip(opening_chars, closing_chars):
             if c == close and current.startswith(open):
                 found_close = True
                 break
@@ -28,7 +43,8 @@ def string_to_list(expr_str):
                 current = ''
             else:
                 level -= 1
-        elif c in "[(\\{":
+                current += c
+        elif c in opening_chars:
             if current:
                 current += c
                 if current.startswith(c):
@@ -49,7 +65,7 @@ def string_to_list(expr_str):
                     expr_list.append(c)
             elif re.match(r"[A-Za-z]", c):
                 expr_list.append(c)
-            elif c in "+-*/^":
+            elif c in operations:
                 expr_list.append(c)
             else:
                 raise ValueError(f"Unidentified character '{c}'")
@@ -57,20 +73,40 @@ def string_to_list(expr_str):
     return expr_list
 
 
-def list_to_tokens(expr_list):
-    return expr_list
+class Token:
+    def __init__(self, content: str, token_type):
+        self.content = content
+        self.type = token_type
+    def __repr__(self):
+        return f"{self.content}"
 
-
-def preprocess(expr_input):
-    if isinstance(expr_input, str):
-        expr_list = string_to_list(expr_input)
-        print(expr_list)
-        tokens = list_to_tokens(expr_list)
-        print(tokens)
+def list_to_tokens(expr_list: list[str]) -> list[Union[Token, list]]:
+    tokens = []
+    for term in expr_list:
+        if term[0] == '(':
+            tokens.append(preprocess(term[1:-1]))
+        elif term[0] in opening_chars:
+            assert term[-1] in closing_chars
+            tokens.append(Token(term, opening_types[term[0]]))
+        elif term in operations:
+            tokens.append(Token(term, term))
+        elif re.match(r"^[A-Za-z]$", term):
+            tokens.append(Token(term, "Var"))
+        elif re.match(r"\d", term):
+            tokens.append(Token(term, "Num"))
+        else:
+            raise ValueError(f"Unidentified term '{term}'")
     return tokens
 
 
-def compile(tokens):
+def preprocess(expr_input) -> list[Union[Token, list]]:
+    if isinstance(expr_input, str):
+        expr_list = string_to_list(expr_input)
+        tokens = list_to_tokens(expr_list)
+    return tokens
+
+
+def compile(tokens: list[Union[Token, list]]):
     tokens = preprocess(tokens)
     return tokens
 
