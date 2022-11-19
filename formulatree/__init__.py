@@ -18,12 +18,6 @@ opening_types = {
 }
 
 
-def main():
-    expr_str = input("Enter expression: ")
-    expression = compile_expr(expr_str)
-    print("Expression:", expression)
-
-
 def string_to_list(expr_str: str) -> list[str]:
     expr_list = []
     current = ''
@@ -145,7 +139,3 @@ def compile_expr(expr_input: Any, root=True):
             paren = compile_expr(token, False)
             root.add(paren)
     return root
-
-
-if __name__ == "__main__":
-    main()
