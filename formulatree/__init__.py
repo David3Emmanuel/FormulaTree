@@ -72,7 +72,7 @@ class Token:
     def __init__(self, content: str, token_type: type):
         self.content = content
         self.type = token_type
-    
+
     def to_node(self):
         return self.type(self.content)
 
@@ -86,12 +86,12 @@ def list_to_tokens(expr_list: list[str]) -> list[Union[Token, list]]:
     def is_term(token: Union[Token, list]) -> bool:
         if isinstance(token, list):
             return True
-        return token.type in [Num, Var]
+        return token.type in [Num, Const, Var]
 
     def add(token: Union[Token, list]) -> None:
         if tokens:
             if is_term(tokens[-1]):
-                if is_term(token):
+                if is_term(token) or token.type is Func:
                     tokens.append(Token("*", Mult))
                 elif token.type is Neg:
                     tokens.append(Token("+", Add))
@@ -119,9 +119,11 @@ def list_to_tokens(expr_list: list[str]) -> list[Union[Token, list]]:
 def preprocess(expr_input, root=True) -> list[Union[Token, list]]:
     if isinstance(expr_input, str):
         expr_list = string_to_list(expr_input)
-        if root: print("List:", expr_list)
+        if root:
+            print("List:", expr_list)
         tokens = list_to_tokens(expr_list)
-        if root: print("Tokens:", tokens)
+        if root:
+            print("Tokens:", tokens)
     elif isinstance(expr_input, list):
         return expr_input
     else:
@@ -129,13 +131,13 @@ def preprocess(expr_input, root=True) -> list[Union[Token, list]]:
     return tokens
 
 
-def compile_expr(expr_input: Any, root=True):
+def compile_expr(expr_input: Any):
     tokens = preprocess(expr_input)
     root = Root()
     for token in tokens:
         if isinstance(token, Token):
             root.add(token.to_node())
         elif isinstance(token, list):
-            paren = compile_expr(token, False)
+            paren = compile_expr(token)
             root.add(paren)
     return root
