@@ -49,11 +49,15 @@ class Root(Node):
         for parent in self.current.lineage():
             if node > parent:
                 continue
+            if isinstance(node, (Add, Mult)) and type(node) is type(parent):
+                parent.size += 1
+                break
             if parent.full():
-                if node == parent or node.full():
+                if node.full():
                     continue
-                branch = parent.children.pop()
-                node.add(branch)
+                else:
+                    branch = parent.children.pop()
+                    node.add(branch)
 
             self.current = node
             if parent is self:
