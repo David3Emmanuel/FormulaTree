@@ -121,7 +121,7 @@ class Add(Node):
         def add_coeff(coeff, variables: list):
             if coeff is None:
                 coeff = 1
-            var_str = repr(sorted(variables))
+            var_str = str(sorted([var.str() for var in variables]))
             if var_str in coeff_dict:
                 coeff_dict[var_str][1] += coeff
             else:
@@ -199,35 +199,61 @@ class Mult(Node):
         return output
     
     def eval(self) -> Node:
+        if len(self.children) == 1:
+            return self.children[0]
+        
+        coefficient, counts = self.count_factors()
+        if len(counts) == 0:
+            return Num(coefficient)
+
+        output = self.combine_factors(coefficient, counts)
+        if len(output.children) == 1:
+            return output.children[0]
+        else:
+            return output
+
+    def combine_factors(self, coefficient, counts):
+        output = Mult()
+        if coefficient != 1:
+            output.add(Num(coefficient))
+        for factor, count_ in counts.values():
+            count = count_.eval()
+            if isinstance(count, Num) and count.value == 1:
+                    output.add(factor)
+            else:
+                new_factor = Pow()
+                new_factor.add(factor)
+                new_factor.add(count.eval())
+                output.add(new_factor.eval())
+        return output
+
+    def count_factors(self):
         coefficient = 1
         counts = {}
 
         for factor in self.factors():
             if isinstance(factor, Num):
                 coefficient *= factor.value
-            else:
-                factor_str = repr(factor)
+            elif isinstance(factor, Pow):
+                factor_str = str(factor.children[0])
                 if factor_str in counts:
-                    counts[factor_str][1] += 1
+                    counts[factor_str][1].add(factor.children[1])
                 else:
-                    counts[factor_str] = [factor, 1]
-
-        if len(counts) == 0:
-            return Num(coefficient)
-        
-        output = Mult()
-        if coefficient != 1:
-            output.add(Num(coefficient))
-        for factor, count in counts.values():
-            if count == 1:
-                output.add(factor)
+                    count = Add()
+                    count.add(factor.children[1])
+                    counts[factor_str] = [factor.children[0], count]
             else:
-                new_factor = Pow()
-                new_factor.add(factor)
-                new_factor.add(Num(count))
-                output.add(new_factor)
-                
-        return output
+                factor_str = str(factor)
+                if factor_str in counts:
+                    counts[factor_str][1].add(Num(1))
+                else:
+                    count = Add()
+                    count.add(Num(1))
+                    counts[factor_str] = [factor, count]
+            
+            sorted_counts = dict(sorted(counts.items(), key=lambda i:i[0]))
+
+        return coefficient, sorted_counts
 
     def __gt__(self, other):
         if isinstance(other, Root):
@@ -272,7 +298,36 @@ class Pow(Node):
         if isinstance(exponent, Num):
             if isinstance(exponent.value, int):
                 return [base for i in range(exponent.value)]
+            else:
+                output = [base for i in range(int(exponent.value))]
+                pow = Pow()
+                pow.add(base)
+                pow.add(Num(exponent.value - int(exponent.value)))
+                return [*output, pow]
         return [self]
+    
+    def eval(self) -> Node:
+        base, exponent = self.children
+        if isinstance(base, Num):
+            if isinstance(exponent, Num):
+                return Num(base.value ** exponent.value)
+            elif base.value in [0, 1]:
+                return base
+        if isinstance(exponent, Num):
+            if exponent.value == 0:
+                return Num(0)
+            elif exponent.value == 1:
+                return base
+        if isinstance(base, Pow):
+            output = Pow()
+            output.add(base.children[0])
+            out_exponent = Mult()
+            out_exponent.add(base.children[1])
+            out_exponent.add(exponent)
+            output.add(out_exponent.eval())
+            return output
+        
+        return self
 
     def __gt__(self, other):
         if isinstance(other, Root):
@@ -289,13 +344,14 @@ class Pow(Node):
 class Num(Node):
     def __init__(self, content) -> None:
         super().__init__()
-        self.name = str(content)
 
         val = float(content)
         if int(val) == val:
             self.value = int(val)
         else:
             self.value = val
+        
+        self.name = str(self.value)
 
     def eval(self) -> Self:
         return self
