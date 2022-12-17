@@ -1,6 +1,7 @@
 from typing import Any
+
 from .nodes import Root
-from .preprocessing import preprocess, Token
+from .preprocessing import Token, preprocess
 
 
 def compile_expr(expr_input: Any):
@@ -16,4 +17,4 @@ def compile_expr(expr_input: Any):
 
 
 def simplify(expression: Root):
-    return expression
+    return expression.eval()

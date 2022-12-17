@@ -120,11 +120,7 @@ def list_to_tokens(expr_list: list[str]) -> list[Union[Token, list]]:
 def preprocess(expr_input, root=True) -> list[Union[Token, list]]:
     if isinstance(expr_input, str):
         expr_list = string_to_list(expr_input)
-        if root:
-            print("List:", expr_list)
         tokens = list_to_tokens(expr_list)
-        if root:
-            print("Tokens:", tokens)
     elif isinstance(expr_input, list):
         return expr_input
     else:
