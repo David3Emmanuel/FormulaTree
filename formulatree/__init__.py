@@ -1,6 +1,6 @@
 from typing import Any
 
-from .nodes import Root
+from .nodes import Root, MathError
 from .preprocessing import Token, preprocess
 
 

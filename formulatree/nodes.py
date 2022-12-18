@@ -1,4 +1,8 @@
-from typing import Self
+from typing import Self, Union
+
+
+class MathError(Exception):
+    pass
 
 
 class Node:
@@ -14,6 +18,7 @@ class Node:
     def add(self, node):
         self.children.append(node)
         node.parent = self
+        return self
 
     def full(self) -> bool:
         assert len(self.children) <= self.size, "Overflow"
@@ -39,7 +44,7 @@ class Node:
 
     def __eq__(self, other):
         raise NotImplementedError()
-    
+
     def str(self) -> str:
         return self.__repr__()
 
@@ -98,6 +103,8 @@ class Add(Node):
         self.size = 2
 
     def eval(self) -> Node:
+        if len(self.children) == 1:
+            return self.children[0]
         coeff_dict = self.get_coeffs()
         terms = []
         for variables, coeff in coeff_dict.values():
@@ -128,8 +135,7 @@ class Add(Node):
                 coeff_dict[var_str] = [variables, coeff]
                 return
 
-        for term_ in self.children:
-            term = term_.eval()
+        for term in self.open_brackets():
             if isinstance(term, Num):
                 add_coeff(term.value, [])
             elif isinstance(term, Var):
@@ -144,11 +150,20 @@ class Add(Node):
                     else:
                         variables.append(factor)
                 add_coeff(coefficient, variables)
-                
+
             else:
-                raise ValueError(f"Unrecognized term {term}")
+                raise MathError(f"Unrecognized term {term}")
 
         return coeff_dict
+
+    def open_brackets(self):
+        new_children = []
+        for term in [child.eval() for child in self.children]:
+            if isinstance(term, Add):
+                new_children.extend(term.children)
+            else:
+                new_children.append(term)
+        return new_children
 
     def __gt__(self, other):
         if isinstance(other, Root):
@@ -157,7 +172,7 @@ class Add(Node):
 
     def __eq__(self, other):
         return isinstance(other, Add)
-    
+
     def str(self):
         output = ' + '.join([term.str() for term in self.children])
         return output.replace('+ -', '- ')
@@ -167,41 +182,72 @@ class Neg(Node):
     def __init__(self, content='-') -> None:
         super().__init__()
         self.size = 1
-    
+
     def eval(self):
-        output = Mult()
-        output.add(Num(-1))
-        output.add(self.children[0])
-        return output.eval()
+        return Mult()\
+            .add(Num(-1))\
+            .add(self.children[0])\
+            .eval()
 
     def __gt__(self, other):
         if isinstance(other, Root):
             return not other.main
-        return isinstance(other, (Num, Const, Var, Func, Pow, Mult, Inv, Neg))
+        return isinstance(other, (Num, Const, Var, Func, Mult, Inv, Neg))
 
     def __eq__(self, other):
         return False
+
 
 class Mult(Node):
     def __init__(self, content='*') -> None:
         super().__init__()
         self.size = 2
-    
+
     def factors(self) -> list[Node]:
         output = []
         for child in [child.eval() for child in self.children]:
-            if isinstance(child, (Num, Var)):
+            if isinstance(child, (Num, Var, Add)):
                 output.append(child)
             elif isinstance(child, (Mult, Pow)):
                 output.extend(child.factors())
             else:
-                raise ValueError(f"Cannot find the factors of {child}")
+                raise MathError(f"Cannot find the factors of {child}")
+
         return output
-    
+
+    def expand(self):
+        polynomials = []
+        other_factors = []
+
+        for factor in self.factors():
+            if isinstance(factor, Add):
+                polynomials.append(factor)
+            else:
+                other_factors.append(factor)
+
+        if not polynomials:
+            return None
+
+        expanded = Add()
+        for polynomial in polynomials:
+            for term in polynomial.children:
+                for factor in other_factors:
+                    expanded.add(
+                        Mult()
+                            .add(term)
+                            .add(factor)
+                            .eval()
+                    )
+        return expanded.eval()
+
     def eval(self) -> Node:
         if len(self.children) == 1:
             return self.children[0]
-        
+
+        expanded = self.expand()
+        if expanded:
+            return expanded.eval()
+
         coefficient, counts = self.count_factors()
         if len(counts) == 0:
             return Num(coefficient)
@@ -219,12 +265,14 @@ class Mult(Node):
         for factor, count_ in counts.values():
             count = count_.eval()
             if isinstance(count, Num) and count.value == 1:
-                    output.add(factor)
+                output.add(factor)
             else:
-                new_factor = Pow()
-                new_factor.add(factor)
-                new_factor.add(count.eval())
-                output.add(new_factor.eval())
+                output.add(
+                    Pow()
+                    .add(factor)
+                    .add(count.eval())
+                    .eval()
+                )
         return output
 
     def count_factors(self):
@@ -250,19 +298,18 @@ class Mult(Node):
                     count = Add()
                     count.add(Num(1))
                     counts[factor_str] = [factor, count]
-            
-            sorted_counts = dict(sorted(counts.items(), key=lambda i:i[0]))
 
+        sorted_counts = dict(sorted(counts.items(), key=lambda i: i[0]))
         return coefficient, sorted_counts
 
     def __gt__(self, other):
         if isinstance(other, Root):
             return not other.main
-        return isinstance(other, (Num, Const, Var, Func, Pow))
+        return isinstance(other, (Num, Const, Var, Func, Pow, Inv))
 
     def __eq__(self, other):
-        return isinstance(other, (Mult, Inv))
-    
+        return isinstance(other, Mult)
+
     def str(self):
         def format_factor(factor):
             if isinstance(factor, Num):
@@ -279,6 +326,12 @@ class Inv(Node):
         super().__init__()
         self.size = 1
 
+    def eval(self) -> Node:
+        return Pow()\
+            .add(self.children[0])\
+            .add(Num(-1))\
+            .eval()
+
     def __gt__(self, other):
         if isinstance(other, Root):
             return not other.main
@@ -294,39 +347,58 @@ class Pow(Node):
         self.size = 2
 
     def factors(self) -> list[Node]:
+        def positive_int(n: Union[int, float]):
+            if n < 0:
+                return 0
+            else:
+                return int(n)
+
         base, exponent = self.children
         if isinstance(exponent, Num):
-            if isinstance(exponent.value, int):
+            if isinstance(exponent.value, int) and exponent.value >= 0:
                 return [base for i in range(exponent.value)]
             else:
-                output = [base for i in range(int(exponent.value))]
-                pow = Pow()
-                pow.add(base)
-                pow.add(Num(exponent.value - int(exponent.value)))
+                output = [base for i in range(positive_int(exponent.value))]
+                pow = Pow()\
+                    .add(base)\
+                    .add(Num(exponent.value - positive_int(exponent.value)))
                 return [*output, pow]
         return [self]
-    
+
     def eval(self) -> Node:
-        base, exponent = self.children
+        base, exponent = [child.eval() for child in self.children]
         if isinstance(base, Num):
             if isinstance(exponent, Num):
+                if base.value == 0 and exponent.value <= 0:
+                    raise MathError("Division by zero")
                 return Num(base.value ** exponent.value)
             elif base.value in [0, 1]:
                 return base
         if isinstance(exponent, Num):
             if exponent.value == 0:
-                return Num(0)
+                return Num(1)
             elif exponent.value == 1:
                 return base
         if isinstance(base, Pow):
             output = Pow()
-            output.add(base.children[0])
-            out_exponent = Mult()
-            out_exponent.add(base.children[1])
-            out_exponent.add(exponent)
-            output.add(out_exponent.eval())
+            output\
+                .add(base.children[0])\
+                .add(
+                    Mult()
+                    .add(base.children[1])
+                    .add(exponent)
+                    .eval()
+                )
             return output
-        
+        elif isinstance(base, Mult):
+            output = Mult()
+            for base_factor in base.children:
+                output.add(
+                    Pow()
+                    .add(base_factor)
+                    .add(exponent)
+                )
+            return output
         return self
 
     def __gt__(self, other):
@@ -336,7 +408,7 @@ class Pow(Node):
 
     def __eq__(self, other):
         return isinstance(other, Pow)
-    
+
     def str(self):
         return self.children[0].str() + '^' + self.children[1].str()
 
@@ -350,7 +422,7 @@ class Num(Node):
             self.value = int(val)
         else:
             self.value = val
-        
+
         self.name = str(self.value)
 
     def eval(self) -> Self:
@@ -361,7 +433,7 @@ class Num(Node):
 
     def __eq__(self, other):
         return isinstance(other, (Num, Const, Var))
-    
+
     def str(self):
         return self.name
 
@@ -370,7 +442,7 @@ class Var(Node):
     def __init__(self, content) -> None:
         super().__init__()
         self.name = content
-    
+
     def eval(self):
         return self
 
@@ -379,7 +451,7 @@ class Var(Node):
 
     def __eq__(self, other):
         return isinstance(other, (Num, Const, Var))
-    
+
     def str(self):
         return self.name
 

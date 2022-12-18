@@ -1,4 +1,4 @@
-from . import compile_expr, simplify
+from . import compile_expr, simplify, MathError
 
 
 def main():
@@ -10,7 +10,7 @@ def main():
             expression = compile_expr(expr_str)
             simplified = simplify(expression)
             print("Simplified:", simplified.str())
-        except ValueError as error:
+        except MathError as error:
             print(error)
 
 
