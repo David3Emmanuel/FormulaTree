@@ -1,8 +1,10 @@
 from typing import Self, Union
+import itertools
 
 
 class MathError(Exception):
     pass
+NULL = None
 
 
 class Node:
@@ -95,6 +97,9 @@ class Root(Node):
             if isinstance(other, Root):
                 return not other.main
             return False
+    
+    def str(self):
+        return f"({self.children[0].str()})"
 
 
 class Add(Node):
@@ -133,14 +138,13 @@ class Add(Node):
                 coeff_dict[var_str][1] += coeff
             else:
                 coeff_dict[var_str] = [variables, coeff]
-                return
 
         for term in self.open_brackets():
             if isinstance(term, Num):
                 add_coeff(term.value, [])
             elif isinstance(term, Var):
                 add_coeff(1, [term])
-            elif isinstance(term, Mult):
+            elif isinstance(term, (Mult, Pow)):
                 factors = term.factors()
                 coefficient, variables = None, []
                 for factor in factors:
@@ -229,15 +233,12 @@ class Mult(Node):
             return None
 
         expanded = Add()
-        for polynomial in polynomials:
-            for term in polynomial.children:
-                for factor in other_factors:
-                    expanded.add(
-                        Mult()
-                            .add(term)
-                            .add(factor)
-                            .eval()
-                    )
+        polynomial_factors = list(itertools.product(*[polynomial.children for polynomial in polynomials]))
+        for factors in polynomial_factors:
+            new_factor = Mult()
+            for factor in [*other_factors, *factors]:
+                new_factor.add(factor)
+            expanded.add(new_factor)
         return expanded.eval()
 
     def eval(self) -> Node:
